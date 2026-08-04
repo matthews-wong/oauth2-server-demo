@@ -1,0 +1,7 @@
+# Runtime dependencies for oauth2-server-demo.
+# For development extras (pytest, httpx) install with:  pip install -e ".[dev]"
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.5
+PyJWT>=2.8
+python-multipart>=0.0.9
