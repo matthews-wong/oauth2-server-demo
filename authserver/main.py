@@ -99,6 +99,7 @@ def create_app(data_store: Store | None = None) -> FastAPI:
             response_type=response_type,
             client_id=client_id,
             redirect_uri=redirect_uri,
+            scope=scope,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
         )
@@ -134,6 +135,7 @@ def create_app(data_store: Store | None = None) -> FastAPI:
             response_type=response_type,
             client_id=client_id,
             redirect_uri=redirect_uri,
+            scope=scope,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
         )
@@ -332,6 +334,7 @@ def _validate_authorization_request(
     response_type: str,
     client_id: str,
     redirect_uri: str,
+    scope: str,
     code_challenge: str,
     code_challenge_method: str,
 ) -> JSONResponse | None:
@@ -355,6 +358,16 @@ def _validate_authorization_request(
         return _oauth_error(
             "unsupported_response_type",
             f"Only response_type={SUPPORTED_RESPONSE_TYPE!r} is supported.",
+        )
+
+    # The requested scope must be a subset of what the client is registered
+    # for; otherwise the code (and the access token minted from it) would carry
+    # privileges the client was never granted (RFC 6749 §3.3, §4.1.2.1).
+    unregistered = [s for s in scope.split() if s not in client.allowed_scopes]
+    if unregistered:
+        return _oauth_error(
+            "invalid_scope",
+            f"Scope(s) not allowed for this client: {' '.join(unregistered)}.",
         )
 
     # PKCE is mandatory in this demo (public clients).

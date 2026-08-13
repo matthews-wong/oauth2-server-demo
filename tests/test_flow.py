@@ -180,6 +180,64 @@ def test_authorization_code_is_single_use(client: TestClient) -> None:
     assert second.json()["error"] == "invalid_grant"
 
 
+def test_scope_outside_client_registration_is_rejected(client: TestClient) -> None:
+    """A scope the client is not registered for must yield invalid_scope and
+    issue no authorization code (RFC 6749 §3.3 / §4.1.2.1)."""
+    _verifier, challenge = make_pkce_pair()
+    resp = client.post(
+        "/authorize",
+        data={
+            "response_type": "code",
+            "client_id": DEMO_CLIENT_ID,
+            "redirect_uri": DEMO_REDIRECT_URI,
+            # "admin" is not among the client's allowed scopes.
+            "scope": "openid admin",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "username": DEMO_USERNAME,
+            "password": DEMO_PASSWORD,
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_scope"
+
+
+def test_registered_subset_scope_is_accepted(client: TestClient) -> None:
+    """A scope that is a subset of the client's registration is honoured and
+    reflected verbatim in the issued token."""
+    verifier, challenge = make_pkce_pair()
+    subset_scope = "openid email"
+    auth = client.post(
+        "/authorize",
+        data={
+            "response_type": "code",
+            "client_id": DEMO_CLIENT_ID,
+            "redirect_uri": DEMO_REDIRECT_URI,
+            "scope": subset_scope,
+            "state": "s",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "username": DEMO_USERNAME,
+            "password": DEMO_PASSWORD,
+        },
+    )
+    assert auth.status_code == 303, auth.text
+    code = parse_qs(urlparse(auth.headers["location"]).query)["code"][0]
+
+    token_resp = client.post(
+        "/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": DEMO_REDIRECT_URI,
+            "client_id": DEMO_CLIENT_ID,
+            "code_verifier": verifier,
+        },
+    )
+    assert token_resp.status_code == 200, token_resp.text
+    assert token_resp.json()["scope"] == subset_scope
+
+
 def test_userinfo_requires_bearer_token(client: TestClient) -> None:
     """/userinfo must reject a missing/garbage Authorization header."""
     assert client.get("/userinfo").status_code == 401

@@ -69,6 +69,7 @@ sequenceDiagram
 - **Signed JWT access tokens** via PyJWT (`iss`, `sub`, `aud`, `scope`, `iat`, `exp`, `jti`).
 - **Opaque, rotating refresh tokens** — state kept server-side so revocation is a single flag.
 - **Single-use authorization codes** bound to `client_id` + `redirect_uri` + `code_challenge`.
+- **Scope enforcement** — the requested `scope` must be a subset of the client's registered scopes, else `invalid_scope`.
 - **RFC-shaped error responses** (`error` / `error_description`).
 - **RFC 8414 discovery** document.
 - **Readable by design** — small modules, docstrings that cite the relevant RFC sections.
@@ -202,11 +203,13 @@ curl -s -X POST http://localhost:8000/token \
 - **No CSRF / session hardening** on the login form, and no rate limiting or brute-force
   protection.
 - **No TLS.** The issuer is `http://localhost`. OAuth2 requires HTTPS everywhere in reality.
-- **Minimal validation** of scopes and redirect URIs beyond what the flow needs to teach.
+- **No consent persistence / rate limiting.** The login form always re-prompts and does no
+  brute-force protection.
 
 What the demo *does* get right (and is worth studying): PKCE S256 with constant-time
-comparison, single-use auth codes bound to client + redirect_uri + challenge, refresh-token
-rotation, and RFC-shaped error responses.
+comparison, single-use auth codes bound to client + redirect_uri + challenge, exact-match
+`redirect_uri` validation, requested-scope enforcement against the client's registration,
+refresh-token rotation, and RFC-shaped error responses.
 
 ## Project structure
 
@@ -239,8 +242,9 @@ pytest -q
 The suite drives the full Authorization Code + PKCE flow through the ASGI app with
 Starlette's `TestClient` (no network): a happy path (`/authorize` → `/token` → `/userinfo`
 → refresh), plus PKCE-mismatch rejection, unknown-client rejection at both `/authorize` and
-`/token`, single-use-code enforcement, bad credentials, bearer-token validation, and the
-discovery document. CI runs it on Python 3.10–3.12.
+`/token`, single-use-code enforcement, scope-enforcement (both rejection of an unregistered
+scope and acceptance of a registered subset), bad credentials, bearer-token validation, and
+the discovery document. CI runs it on Python 3.10–3.12.
 
 ## Roadmap
 
